@@ -1,0 +1,34 @@
+# https://github.com/marketplace/actions/sobelow
+
+name: Sobelow
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'src/**'
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v2
+
+    - name: Run Security Scan
+      id: run-action
+      uses: sobelow/action@v1
+
+    - name: Upload SARIF File
+      uses: github/codeql-action/upload-sarif@v1
+      with:
+        sarif_file: results.sarif
