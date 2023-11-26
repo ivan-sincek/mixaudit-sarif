@@ -1,0 +1,59 @@
+name: MixAudit
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        elixir-version: [ '1.10.3' ]
+        otp-version: [ '22.3' ]
+        python-version: [ '3.8' ]
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Set Up OTP ${{ matrix.otp-version }} / Elixir  ${{ matrix.elixir-version }}
+      uses: erlef/setup-elixir@885971a72ed1f9240973bd92ab57af8c1aa68f24
+      with:
+        elixir-version: ${{ matrix.elixir-version }}
+        otp-version: ${{ matrix.otp-version }}
+
+    - name: Install Dependencies
+      run: mix deps.get
+
+    - name: Install MixAudit
+      run: |
+        mix escript.install --force hex mix_audit
+        echo "$HOME/.mix/escripts" >> $GITHUB_PATH
+
+    - name: Run Security Scan
+      continue-on-error: true
+      run: |
+          mix_audit --path ./ --format json > mixaudit.json
+
+    - name: Set Up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Convert JSON to SARIF
+      run: |
+        curl -fsSL https://raw.githubusercontent.com/ivan-sincek/mixaudit-sarif/main/src/mixaudit_sarif.py -o mixaudit_sarif.py
+        curl -fsSL https://raw.githubusercontent.com/ivan-sincek/mixaudit-sarif/main/src/requirements.txt -o requirements.txt
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        python mixaudit_sarif.py -f mixaudit.json -o results.sarif -d $GITHUB_WORKSPACE
+
+    - name: Upload SARIF File
+      uses: github/codeql-action/upload-sarif@v1
+      with:
+        sarif_file: results.sarif
